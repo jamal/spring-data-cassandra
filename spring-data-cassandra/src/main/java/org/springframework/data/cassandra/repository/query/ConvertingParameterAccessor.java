@@ -18,6 +18,7 @@ package org.springframework.data.cassandra.repository.query;
 import java.util.Iterator;
 
 import org.springframework.data.cassandra.convert.CassandraConverter;
+import org.springframework.data.domain.Continuable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
@@ -49,6 +50,14 @@ class ConvertingParameterAccessor implements CassandraParameterAccessor {
 	@Override
 	public Pageable getPageable() {
 		return delegate.getPageable();
+	}
+
+	/* (non-Javadoc)
+	 * @see org.springframework.data.repository.query.ParameterAccessor#getPageable()
+	 */
+	@Override
+	public Continuable getContinuable() {
+		return delegate.getContinuable();
 	}
 
 	/* (non-Javadoc)

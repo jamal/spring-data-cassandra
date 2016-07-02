@@ -35,6 +35,7 @@ import org.springframework.data.cassandra.repository.query.CassandraQueryExecuti
 import org.springframework.data.cassandra.repository.query.CassandraQueryExecution.ResultSetQuery;
 import org.springframework.data.cassandra.repository.query.CassandraQueryExecution.SingleEntityExecution;
 import org.springframework.data.cassandra.repository.query.CassandraQueryExecution.StreamExecution;
+import org.springframework.data.cassandra.repository.query.CassandraQueryExecution.ContinuationQueryExecution;
 import org.springframework.data.repository.query.ParameterAccessor;
 import org.springframework.data.repository.query.RepositoryQuery;
 import org.springframework.data.repository.query.ResultProcessor;
@@ -113,6 +114,8 @@ public abstract class AbstractCassandraQuery implements RepositoryQuery {
 			return new ResultSetQuery(template);
 		} else if (method.isStreamQuery()) {
 			return new StreamExecution(template, resultProcessing);
+		} else if (method.isContinuationQuery()) {
+			return new ContinuationQueryExecution(template, accessor.getContinuable());
 		} else {
 			return new SingleEntityExecution(template);
 		}

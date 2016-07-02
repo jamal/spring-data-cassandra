@@ -16,10 +16,19 @@
 
 package org.springframework.data.cassandra.repository.query;
 
+import java.util.List;
 import java.util.function.Function;
 
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.cassandra.core.CassandraOperations;
+import org.springframework.data.cassandra.mapping.CassandraMappingContext;
+import org.springframework.data.cassandra.mapping.CassandraPersistentEntity;
+import org.springframework.data.cassandra.mapping.CassandraPersistentProperty;
+import org.springframework.data.domain.*;
+import org.springframework.data.mapping.PersistentEntity;
+import org.springframework.data.mapping.PersistentProperty;
+import org.springframework.data.mapping.PersistentPropertyAccessor;
+import org.springframework.data.mapping.PreferredConstructor;
 import org.springframework.data.repository.query.ResultProcessor;
 import org.springframework.data.repository.query.ReturnedType;
 import org.springframework.data.util.StreamUtils;
@@ -119,6 +128,61 @@ interface CassandraQueryExecution {
 		@Override
 		public Object execute(String query, Class<?> type) {
 			return operations.query(query);
+		}
+	}
+
+	/**
+	 * {@link ContinuationQueryExecution} to return a {@link org.springframework.data.domain.Slice}.
+	 */
+	@RequiredArgsConstructor
+	final class ContinuationQueryExecution implements CassandraQueryExecution {
+
+		private final @NonNull CassandraOperations operations;
+		private final @NonNull Continuable continuable;
+
+		/* (non-Javadoc)
+		 * @see org.springframework.data.cassandra.repository.query.CassandraQueryExecution#execute(java.lang.String, java.lang.Class)
+		 */
+		@Override
+		public Object execute(String query, Class<?> type) {
+
+			CassandraMappingContext context = operations.getConverter().getMappingContext();
+
+			final int pageSize = continuable.getPageSize();
+			final Object continuationValue = continuable.getContinuationValue();
+
+			final CassandraPersistentEntity<?> entity = context.getPersistentEntity(type);
+			CassandraPersistentProperty idProperty = entity.getIdProperty();
+
+			// TODO: Use SimpleStatement instead of building the query
+			String sliceQuery = query;
+			if (continuationValue != null) {
+				if (idProperty == null) {
+					throw new IllegalArgumentException("Expected an Id for Continuation query");
+				}
+
+				// TODO: Properly deserialize continuationValue
+				sliceQuery += String.format(" WHERE token(%s) > token(%s)", idProperty.getColumnName(), continuationValue.toString());
+			}
+			sliceQuery += " LIMIT " + String.valueOf(pageSize + 1);
+
+			List result = operations.select(sliceQuery, type);
+
+			boolean hasNext = result.size() > pageSize;
+			Continuable nextContinuable = continuable;
+			if (hasNext) {
+				result = result.subList(0, pageSize);
+
+				if (result.size() > 0) {
+					Object last = result.get(result.size()-1);
+					final PersistentPropertyAccessor accessor = entity.getPropertyAccessor(last);
+					if (idProperty != null) {
+						nextContinuable = new ContinuationRequest(accessor.getProperty(idProperty), pageSize);
+					}
+				}
+			}
+
+			return new ContinuationImpl<Object>(result, nextContinuable, hasNext);
 		}
 	}
 
